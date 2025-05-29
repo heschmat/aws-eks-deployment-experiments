@@ -1,16 +1,11 @@
 ---
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: game-2048
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  namespace: game-2048
+  namespace: games
   name: deployment-2048
 spec:
-  replicas: 2  # fewer replicas
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: app-2048
@@ -36,7 +31,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  namespace: game-2048
+  namespace: games
   name: service-2048
 spec:
   ports:
@@ -47,4 +42,3 @@ spec:
   selector:
     app.kubernetes.io/name: app-2048
 ---
-

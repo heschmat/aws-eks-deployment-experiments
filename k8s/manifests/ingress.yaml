@@ -1,21 +1,36 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  namespace: game-2048
-  name: ingress-2048
+  name: games-ingress
+  namespace: games
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/group.name: games
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/load-balancer-name: games-alb
+    kubernetes.io/ingress.class: alb
 spec:
   ingressClassName: alb
   rules:
-    - http:
+    - host: tetris.54.146.153.241.nip.io
+      http:
         paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: service-2048
-              port:
-                number: 80
-
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: service-tetris
+                port:
+                  number: 80
+    - host: 2048.54.146.153.241.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: service-2048
+                port:
+                  number: 80

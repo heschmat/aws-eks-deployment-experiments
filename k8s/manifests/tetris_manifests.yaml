@@ -1,13 +1,7 @@
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: game-tetris
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  namespace: game-tetris
+  namespace: games
   name: deployment-tetris
 spec:
   selector:
@@ -29,7 +23,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  namespace: game-tetris
+  namespace: games
   name: service-tetris
 spec:
   ports:
