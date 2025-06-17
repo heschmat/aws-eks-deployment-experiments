@@ -14,7 +14,7 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: tetris.54.146.153.241.nip.io
+    - host: tetris.98.80.56.241.nip.io # tetris.<ALB_EXTERNAL_IP>.nip.io
       http:
         paths:
           - path: /
@@ -24,7 +24,7 @@ spec:
                 name: service-tetris
                 port:
                   number: 80
-    - host: 2048.54.146.153.241.nip.io
+    - host: 2048.98.80.56.241.nip.io
       http:
         paths:
           - path: /
