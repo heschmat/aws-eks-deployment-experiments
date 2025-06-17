@@ -2,12 +2,13 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: cluster-2048
+  name: games-cluster
   region: us-east-1
 
-nodeGroups:
-  - name: nodes-2048
+managedNodeGroups:
+  - name: games-nodes
     instanceType: t3.small
     desiredCapacity: 2
     minSize: 2
     maxSize: 4
+    spot: true  # for learning purposes to save costs

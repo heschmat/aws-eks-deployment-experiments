@@ -1,19 +1,10 @@
 # Deploying a Sample Application to Amazon EKS
 
-This guide walks you through deploying a simple 2048 game application to Amazon EKS using the AWS Load Balancer Controller. It includes cluster creation, deploying the application, configuring ingress, and clean-up instructions.
+![Classic Games on the Cloud](assets/games-eks.png)
 
-## 1. Download Application Manifest
+This guide walks you through deploying 3 classic games to Amazon EKS using the AWS Load Balancer Controller. It includes cluster creation, deploying the application, configuring ingress, and clean-up instructions.
 
-The 2048 application manifest is provided by the AWS Load Balancer Controller examples.
-
-```sh
-curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.5.4/docs/examples/2048/2048_full.yaml
-
-# or:
-wget https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.5.4/docs/examples/2048/2048_full.yaml
-```
-
-## 2. Create the EKS Cluster
+## 1. Create the EKS Cluster
 
 Provision the EKS cluster using `eksctl`. This process may take approximately 15 minutes.
 
@@ -46,7 +37,7 @@ kubectl config current-context
 kubectl get nodes
 ```
 
-## 3. Deploy the Application and Ingress Resources
+## 2. Deploy the Application and Ingress Resources
 
 Apply the namespace, deployment, and service definitions:
 
