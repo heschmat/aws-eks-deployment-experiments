@@ -9,6 +9,7 @@ This guide walks you through deploying 3 classic games to Amazon EKS using the A
 Provision the EKS cluster using `eksctl`. This process may take approximately 15 minutes.
 
 ```sh
+# You must use the -f or --config-file flag to specify your YAML config.
 eksctl create cluster -f ./k8s/cluster-config.yaml
 
 # cluster-config.yaml -------------
@@ -33,6 +34,11 @@ This command also updates your `kubeconfig` automatically.
 Verify that your context is correctly set:
 
 ```sh
+# Update kubeconfig to use the new cluster
+# This command adds the cluster credentials to the local ~/.kube/config.
+# & lets you interact with the cluster using kubectl.
+aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
+
 kubectl config current-context
 
 kubectl get nodes
@@ -100,20 +106,69 @@ aws iam create-policy \
 
 ```sh
 eksctl utils associate-iam-oidc-provider \
-  --region $this_region \
-  --cluster $this_cluster \
+  --region $AWS_REGION \
+  --cluster $CLUSTER_NAME \
   --approve
+```
+
+
+```sh
+$ aws iam list-open-id-connect-providers
+{
+    "OpenIDConnectProviderList": [
+        {
+            "Arn": "arn:aws:iam::467930584066:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/A89F998CE7639459501717F1AFF56466"
+        }
+    ]
+}
+
+# replace the `Arn` from above into <arn>
+$ aws iam get-open-id-connect-provider --open-id-connect-provider-arn <arn>
+{
+    "Url": "oidc.eks.us-east-1.amazonaws.com/id/A89F998CE7639459501717F1AFF56466",
+    "ClientIDList": [
+        "sts.amazonaws.com"
+    ],
+    "ThumbprintList": [
+        "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+    ],
+    "CreateDate": "2025-07-25T01:23:11.617000+00:00",
+    "Tags": [
+        {
+            "Key": "alpha.eksctl.io/eksctl-version",
+            "Value": "0.211.0"
+        },
+        {
+            "Key": "alpha.eksctl.io/cluster-name",
+            "Value": "games-cluster"
+        }
+    ]
+}
+
+```
+
+#### trust policy
+
+The trust policy is part of an IAM role's definition, and you can retrieve it like this:
+
+```sh
+
+aws iam get-role --role-name <role-name> \
+  --query "Role.AssumeRolePolicyDocument" \
+  --output json
+
+
 ```
 
 ### Create Service Account with IAM Role
 
 ```sh
 eksctl create iamserviceaccount \
-  --cluster $this_cluster \
+  --cluster $CLUSTER_NAME \
   --namespace kube-system \
   --name aws-lb-ctl \
   --role-name AWSEKSLBControllerRole \
-  --attach-policy-arn arn:aws:iam::<AccountID>:policy/AWSLBControllerIAMPolicy \
+  --attach-policy-arn arn:aws:iam::$AWS_ACC_ID:policy/AWSLBControllerIAMPolicy \
   --approve
 ```
 
@@ -129,11 +184,13 @@ helm repo update eks
 ### Get the VPC ID for the Cluster
 
 ```sh
-this_vpc=$(aws eks describe-cluster \
-  --name "$this_cluster" \
-  --region "$this_region" \
+VPC_ID=$(aws eks describe-cluster \
+  --name "$CLUSTER_NAME" \
+  --region "$AWS_REGION" \
   --query "cluster.resourcesVpcConfig.vpcId" \
   --output text)
+
+echo $VPC_ID
 ```
 
 ### Install the Controller
@@ -141,11 +198,11 @@ this_vpc=$(aws eks describe-cluster \
 ```sh
 helm install aws-lb-controller eks/aws-load-balancer-controller \
   -n kube-system \
-  --set clusterName=$this_cluster \
+  --set clusterName=$CLUSTER_NAME \
   --set serviceAccount.create=false \
   --set serviceAccount.name=aws-lb-ctl \
-  --set region=$this_region \
-  --set vpcId=$this_vpc
+  --set region=$AWS_REGION \
+  --set vpcId=$VPC_ID
 ```
 
 ## 6. Verify Load Balancer and Access the Application
