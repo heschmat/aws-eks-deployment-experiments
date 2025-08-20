@@ -29,19 +29,43 @@ eksctl create cluster -f ./k8s/cluster-config.yaml
 #     spot: true
 ```
 
-This command also updates your `kubeconfig` automatically.
+When you create the cluster with `eksctl`, it generates a *kubeconfig entry* for you.
+By default, `eksctl` gives the context a human-friendly name in the form:
+```sh
+<iam-identity>@<cluster-name>.<region>.eksctl.io
+```
 
-Verify that your context is correctly set:
+AWS CLI, on the other hand, uses a different naming convention for the context:
+```sh
+arn:aws:eks:<region>:<account-id>:cluster/<cluster-name>
+```
+
+You can list the context and current context like so:
+```
+# List all contexts in your kubeconfig with:
+# Note that the * marks your current context.
+kubectl config get-contexts
+
+# To get just the names:
+kubectl config get-contexts -o name
+
+# Note that both contexts point to the same underlying EKS cluster (games-cluster in us-east-1).
+
+
+# You can always rename contexts in your kubeconfig with:
+# best practice for context naming: <cluster-name>@<environment>.<region>
+kubectl config rename-context OLD_NAME NEW_NAME
+
+```
 
 ```sh
 # Update kubeconfig to use the new cluster
-# This command adds the cluster credentials to the local ~/.kube/config.
+# In general, this command adds the cluster credentials to the local ~/.kube/config.
 # & lets you interact with the cluster using kubectl.
 aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
 
-kubectl config current-context
 
-kubectl get nodes
+kubectl get nodes -o wide
 ```
 
 ## 2. Deploy the Application and Ingress Resources
@@ -61,7 +85,7 @@ Ensure the EC2 node's security group allows inbound traffic to the NodePort.
 Access the app: `http://<NODE_PUBLIC_IP>:<NodePort>`
 
 ```sh
-$ k get svc -n $this_ns
+$ k get svc -n $APP_NS
 NAME             TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
 service-2048     NodePort   10.100.9.229     <none>        80:32321/TCP   19m
 service-tetris   NodePort   10.100.120.140   <none>        80:32322/TCP   11m
@@ -80,7 +104,7 @@ kubectl apply -f ingress.yaml
 Check the status of the ingress:
 
 ```sh
-kubectl get ing -n $this_ns
+kubectl get ing -n $APP_NS
 ```
 
 > **Note:** Initially, there will be no public address for the ingress resource. The AWS Load Balancer Controller will create and configure a LoadBalancer based on the ingress specifications. We will create one shortly.
@@ -105,12 +129,16 @@ aws iam create-policy \
 ### Associate IAM OIDC Provider with the Cluster
 
 ```sh
+# Set up an IAM OpenID Connect (OIDC) identity provider for your EKS cluster.
 eksctl utils associate-iam-oidc-provider \
   --region $AWS_REGION \
   --cluster $CLUSTER_NAME \
   --approve
 ```
-
+Why this is required?
+- The AWS Load Balancer Controller needs IAM permissions (to create/manage ALBs, Target Groups, security groups, etc.).
+- Best practice (and AWS's recommended method) is to use IAM Roles for Service Accounts (IRSA).
+- IRSA depends on the OIDC provider being set up — it lets Kubernetes service accounts in your cluster assume IAM roles securely.
 
 ```sh
 $ aws iam list-open-id-connect-providers
@@ -216,7 +244,7 @@ kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-cont
 ### Retrieve the Ingress Address
 
 ```sh
-kubectl get ing -n $this_cluster
+kubectl get ing -n $CLUSTER_NAME
 ```
 
 As we're just testing and don't necessarily want to incur additional costs by buying a domain, we can use free DNS services - such as `nip.io` or `sslip.io` - that map IPs directly into domain names.
