@@ -6,7 +6,7 @@ This guide walks you through deploying 3 classic games to Amazon EKS using the A
 
 ## 1. Create the EKS Cluster
 
-Provision the EKS cluster using `eksctl`. This process may take approximately 15 minutes.
+Provision the EKS cluster using `eksctl`. This process takes roughly 15 minutes.
 
 ```sh
 # You must use the -f or --config-file flag to specify your YAML config.
@@ -110,23 +110,8 @@ kubectl get ing -n $APP_NS
 > **Note:** Initially, there will be no public address for the ingress resource. The AWS Load Balancer Controller will create and configure a LoadBalancer based on the ingress specifications. We will create one shortly.
 
 
-## 4. Configure IAM Roles for Service Accounts (IRSA)
-
-### Download IAM Policy for AWS Load Balancer Controller
-
-```sh
-curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.11.0/docs/install/iam_policy.json
-```
-
-### Create IAM Policy
-
-```sh
-aws iam create-policy \
-  --policy-name AWSLBControllerIAMPolicy \
-  --policy-document file://iam_policy.json
-```
-
-### Associate IAM OIDC Provider with the Cluster
+## 3. Configure IAM Roles for Service Accounts (IRSA)
+Associate IAM OIDC Provider with the Cluster
 
 ```sh
 # Set up an IAM OpenID Connect (OIDC) identity provider for your EKS cluster.
@@ -140,76 +125,42 @@ Why this is required?
 - Best practice (and AWS's recommended method) is to use IAM Roles for Service Accounts (IRSA).
 - IRSA depends on the OIDC provider being set up — it lets Kubernetes service accounts in your cluster assume IAM roles securely.
 
-```sh
-$ aws iam list-open-id-connect-providers
-{
-    "OpenIDConnectProviderList": [
-        {
-            "Arn": "arn:aws:iam::467930584066:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/A89F998CE7639459501717F1AFF56466"
-        }
-    ]
-}
 
-# replace the `Arn` from above into <arn>
-$ aws iam get-open-id-connect-provider --open-id-connect-provider-arn <arn>
-{
-    "Url": "oidc.eks.us-east-1.amazonaws.com/id/A89F998CE7639459501717F1AFF56466",
-    "ClientIDList": [
-        "sts.amazonaws.com"
-    ],
-    "ThumbprintList": [
-        "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
-    ],
-    "CreateDate": "2025-07-25T01:23:11.617000+00:00",
-    "Tags": [
-        {
-            "Key": "alpha.eksctl.io/eksctl-version",
-            "Value": "0.211.0"
-        },
-        {
-            "Key": "alpha.eksctl.io/cluster-name",
-            "Value": "games-cluster"
-        }
-    ]
-}
-
-```
-
-#### trust policy
-
-The trust policy is part of an IAM role's definition, and you can retrieve it like this:
+## 4. Create Service Account with IAM Role
 
 ```sh
+# AWS provides a ready-made IAM policy JSON (iam_policy.json) with all required permissions (ELB, Target Groups, Security Groups, etc.).
+curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.11.0/docs/install/iam_policy.json
 
-aws iam get-role --role-name <role-name> \
-  --query "Role.AssumeRolePolicyDocument" \
-  --output json
+# Create IAM Policy
+aws iam create-policy \
+  --policy-name AWSLBControllerIAMPolicy \
+  --policy-document file://iam_policy.json
 
+# Remove the policy document:
+rm iam_policy.json
 
-```
+# Use eksctl to bind the above policy to a Kubernetes service account:
+IAM_SA_NAME=aws-lb-ctl
 
-### Create Service Account with IAM Role
-
-```sh
 eksctl create iamserviceaccount \
   --cluster $CLUSTER_NAME \
   --namespace kube-system \
-  --name aws-lb-ctl \
+  --name $IAM_SA_NAME \
   --role-name AWSEKSLBControllerRole \
   --attach-policy-arn arn:aws:iam::$AWS_ACC_ID:policy/AWSLBControllerIAMPolicy \
   --approve
 ```
 
 ## 5. Install AWS Load Balancer Controller Using Helm
-
-### Add and Update Helm Repository
+Add and Update Helm Repository
 
 ```sh
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update eks
 ```
 
-### Get the VPC ID for the Cluster
+Get the VPC ID for the Cluster & install the controller
 
 ```sh
 VPC_ID=$(aws eks describe-cluster \
@@ -219,16 +170,13 @@ VPC_ID=$(aws eks describe-cluster \
   --output text)
 
 echo $VPC_ID
-```
 
-### Install the Controller
-
-```sh
+# Deploy the AWS Load Balancer Controller
 helm install aws-lb-controller eks/aws-load-balancer-controller \
   -n kube-system \
   --set clusterName=$CLUSTER_NAME \
   --set serviceAccount.create=false \
-  --set serviceAccount.name=aws-lb-ctl \
+  --set serviceAccount.name=$IAM_SA_NAME \
   --set region=$AWS_REGION \
   --set vpcId=$VPC_ID
 ```
@@ -244,7 +192,7 @@ kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-cont
 ### Retrieve the Ingress Address
 
 ```sh
-kubectl get ing -n $CLUSTER_NAME
+kubectl get ing -n $APP_NS
 ```
 
 As we're just testing and don't necessarily want to incur additional costs by buying a domain, we can use free DNS services - such as `nip.io` or `sslip.io` - that map IPs directly into domain names.
@@ -269,7 +217,19 @@ Now, the app should be accessible via the address specified in the `host` in ing
 
 ## 7. (Optional) Accessing via NodePort
 
-In the meantime you can access the service via NodePort:
+In the meantime you can access the service via NodePort. The 2048 app has already configured the service as NodePort. So you can access the app via `<NODE_EXT_IP>:<NodePort>`.
+For the tetris game, we've setup the service as `CluserIP`. As we're testing, we can **patch** it to a `NodePort` service.
+
+```sh
+# This command will update the service type from ClusterIP to NodePort. The service will be exposed on a port on each node in the cluster.
+# By default, Kubernetes will automatically assign a port within the NodePort range (30000-32767).
+kubectl patch svc <service-name> -p '{"spec": {"type": "NodePort"}}'
+
+# If you want to specify a specific port, you can include it in the patch:
+kubectl patch svc service-tetris -n $APP_NS -p '{"spec": {"type": "NodePort", "ports": [{"port": 80, "targetPort": 8080, "nodePort": 30001}]}}'
+
+# N.B. Don't forget to add a rule in the security group that allows traffic on port 30001. Or whatever NodePort you've chosen.
+```
 
 ## 8. Clean Up Resources
 
