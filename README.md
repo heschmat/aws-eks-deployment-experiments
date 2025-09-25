@@ -62,10 +62,12 @@ kubectl config rename-context OLD_NAME NEW_NAME
 # Update kubeconfig to use the new cluster
 # In general, this command adds the cluster credentials to the local ~/.kube/config.
 # & lets you interact with the cluster using kubectl.
+# N.B. you need to run `source .env` which acts as a centralized location for common environmental variables.
 aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
 
+k config current-context
 
-kubectl get nodes -o wide
+k get nodes -o wide
 ```
 
 ## 2. Deploy the Application and Ingress Resources

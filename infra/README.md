@@ -20,6 +20,7 @@ This guide shows how to provision an **Amazon EKS cluster** with Terraform, depl
 ```bash
 # This takes ~20 minutes
 cd infra
+terraform init
 terraform apply --auto-approve
 ```
 
@@ -35,6 +36,7 @@ aws eks update-kubeconfig --region $(terraform output -raw region) \
 ## 2. Deploy a Sample App (Nginx demo)
 
 ```bash
+# This Deployment runs Pods from the image nginxdemos/hello, which listens on port 80.
 kubectl create deploy hello --image=nginxdemos/hello
 ```
 
@@ -149,7 +151,30 @@ Access:
 curl -I <INGRESS_ADDRESS>
 ```
 
-💡 Troubleshooting `503 Service Temporarily Unavailable3`: Ensure your service name and port match the Ingress spec.
+💡 Troubleshooting `503 Service Temporarily Unavailable3`: Ensure your service name and port match the Ingress spec
+```sh
+# If you haven't exposed the deployment.
+# 👉 Without this Service, your Ingress would't know where to send requests.
+# `type: ClusterIP` → internal-only Service, used by Ingress or other Pods.
+kubectl expose deploy hello --port 80 --type ClusterIP
+```
+
+Running the above command, Kubernetes generates a Service YAML like this:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+spec:
+  selector:
+    app: hello   # Matches the Deployment's Pods
+  ports:
+  - protocol: TCP
+    port: 80      # Service port (what other Pods/Ingress use)
+    targetPort: 80 # Container port in the Pod
+  type: ClusterIP
+
+```
 
 ---
 
